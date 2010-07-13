@@ -1,0 +1,119 @@
+(w/scope ((head (@@ document (get-elements-by-tag-name "head") 0))
+          (script-queue '())
+
+          ;; If we don't have access to window.localStorage in this browser, we
+          ;; will just use an empty object and cache for this session only.
+          (local-storage (or (@ window local-storage) (create)))
+
+          ;; Make an array from thing.
+          (to-array (func (thing i)
+                      (@@ *array prototype slice (call thing (or i 0)))))
+
+          (same-origin-re (new (*reg-exp (@@ (@ document domain)
+                                             (replace (regex "/\\./g") "\\.")))))
+
+
+          ;; Evaluate `str` in the global context.
+          (global-eval (func (str callback)
+                         (set! callback (or callback (func ())))
+                         (let ((s (@@ document (create-element "script"))))
+                           (set! (@ s type) "text/javascript"
+                                 (@ s text) str)
+                           (@@ head (append-child s))
+                           (@@ head (remove-child s)))
+                         (callback)))
+
+          ;; Can't throw errors in expressions, so this is a way to get around
+          ;; it.
+          (throw-error (lambda (err-constructor msg)
+                         (throw (new (err-constructor msg)))))
+
+          (xhr (if (and (@ window *x-m-l-http-request)
+                        (or (!== (@ window location protocol) "file:")
+                            (! (@ window *active-x-object))))
+                   (func ()
+                     (new (@ window *x-m-l-http-request)))
+                   (func ()
+                     (new ((@ window *active-x-object) "Microsoft.XMLHTTP"))))))
+
+  ;; Make a GET request.
+  (defn (xhr-get-request url callback)
+    (var req (xhr))
+    (w/slots (open send onreadystatechange) req
+      (open "GET" url true)
+      (set! onreadystatechange (func ()
+                                 (w/slots (ready-state response-text) this
+                                   (when (=== ready-state 4)
+                                     (@@ callback (apply req arguments))))))
+      (send)))
+
+  ;; Is the url pointing to a resource on a remote origin?
+  (defn (same-origin? url)
+    (@@ same-origin-re (test url)))
+
+  ;; Try to get the script from the window.localStorage cache.
+  (defn (get-cached script)
+    (if (in script local-storage)
+        (slot-value local-storage script)
+        false))
+
+  (defn (get-script url callback)
+    (if (same-origin? url)
+        (get-same-origin-script url callback)
+        (get-remote-origin-script url callback)))
+
+  (defn (get-remote-origin-script url callback)
+    (let ((el (@@ document (create-element "script")))))
+      (w/slots (type src add-event-listener attach-event ready-state) el
+        (set! type "text/javascript"
+              src url)
+        (cond ((!== (typeof add-event-listener) "undefined")
+               (add-event-listener "load" callback false))
+              ((!== (typeof attach-event) "undefined")
+               (attach-event "onreadystatechange"
+                             (func ()
+                               (when (or (=== ready-state 4)
+                                         (=== ready-state "loaded"))
+                                 (callback)))))
+              (true (throw-error *type-error "$loader: Cannot addEventLister or attachEvent")))
+        (@@ head (append-child el))))
+
+  (defn (get-same-origin-script url callback)
+    ;; TODO: Cache invalidation?
+    (if-let ((cached (get-cached script)))
+      (global-eval cached callback)
+      ;; Since it is not available in localStorage, make an ajax request to
+      ;; fetch it, store the response in the cache, and continue.
+      (xhr-get-request url (func ()
+                             (set! (slot-value local-storage script) response-text)
+                             (global-eval response-text callback)))))
+
+  ;; Start an asynchronous timeout loop that checks to see if there is a
+  ;; batch of scripts on the `script-queue`. When there is a batch,
+  ;; create the script elements with the proper sources and wait for them
+  ;; to be loaded. Once they are loaded, continue the async loop.
+  (once-when# (> (@ script-queue length) 0)
+
+    (let ((continue-timeout-loop (func () repeat-timeout)))
+      (w/slots (batch callback) (funcall (@ script-queue shift))
+
+        ;; Keep a counter of how many scripts are
+        ;; currently loading.
+        (var num-scripts-loading (@ batch length))
+
+        ;; XXX: Using a return value only to force a self-invoking function in
+        ;; the compilation, since a typical for loop wouldn't be valid.
+        (dolist (url batch batch)
+          (get-script url (func () (decf num-scripts-loading))))
+
+        ;; Once there aren't anymore scripts loading, we
+        ;; can continue and process the next batch.
+        (once-when# (=== num-scripts-loading 0)
+          (callback)
+          (continue-timeout-loop)))))
+
+  ;; Public API
+  (set! (@ exports $loader) (create :load (func (scripts callback)
+                                            ((@ script-queue push) (create :batch scripts
+                                                                           :callback (or callback (func () null))))
+                                            this))))
