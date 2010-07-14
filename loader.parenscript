@@ -19,7 +19,7 @@
 
           ;; Evaluate `str` in the global context.
           (global-eval (func (str callback)
-                         (delayed#
+                         (delayed->
                            (set! callback (or callback (func ())))
                            (let ((s (@@ document (create-element "script"))))
                              (set! (@ s type) "text/javascript"
@@ -100,7 +100,7 @@
   ;; batch of scripts on the `script-queue`. When there is a batch,
   ;; create the script elements with the proper sources and wait for them
   ;; to be loaded. Once they are loaded, continue the async loop.
-  (once-when# (> (@ script-queue length) 0)
+  (once-when-> (> (@ script-queue length) 0)
 
     (let ((continue-timeout-loop (func () repeat-timeout)))
       (w/slots (batch callback) (funcall (@ script-queue shift))
@@ -116,7 +116,7 @@
 
         ;; Once there aren't anymore scripts loading, we
         ;; can continue and process the next batch.
-        (once-when# (=== num-scripts-loading 0)
+        (once-when-> (=== num-scripts-loading 0)
           (callback)
           (continue-timeout-loop)))))
 

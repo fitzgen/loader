@@ -77,15 +77,15 @@
                   ,else-form)))
         ,@forms)))
 
-;; NOTE: By convention, all of my asynchronous macros end with the hash
-;; character (#).
+;; NOTE: By convention (which I have made up, but find pleasing), all of my
+;; asynchronous macros end with the an arrow (->).
 
 ;; Syntactical sugar around setTimeout.
 ;;
-;;     (after# (200)
+;;     (after-> (200)
 ;;       (@@ console (log "hello")))
 ;;
-;; expands to
+;; expands to the equivalent of
 ;;
 ;;     (set-timeout (func ()
 ;;                    (@@ console (log "hello")))
@@ -94,7 +94,7 @@
 ;; Also, `repeat-timeout` is anaphorically bound as a symbol macro to
 ;; `(set-timeout recur ms)` where ms is the original milliseconds timeout will
 ;; delay.
-(defmacro+ps after# ((ms) &body body)
+(defmacro+ps after-> ((ms) &body body)
   `(set-timeout (func ()
                   (symbol-macrolet ((repeat-timeout (set-timeout recur ,ms)))
                     ,@body))
@@ -102,19 +102,19 @@
 
 ;; Begin a set-timeout loop that will run `body` once, sometime in the
 ;; future when `test` becomes true.
-(defmacro+ps once-when# (test &body body)
-  `(after# (25)
+(defmacro+ps once-when-> (test &body body)
+  `(after-> (25)
      (if ,test
          (progn ,@body)
        repeat-timeout)))
 
-;; The same as `once-when#`, except that the body will keep being run as long as
+;; The same as `once-when->`, except that the body will keep being run as long as
 ;; `test` is true, not just once.
-(defmacro+ps always-when# (test &body body)
-  `(once-when# ,test
+(defmacro+ps always-when-> (test &body body)
+  `(once-when-> ,test
      (progn ,@body repeat-timeout)))
 
-(defmacro+ps delayed# (&body body)
+(defmacro+ps delayed-> (&body body)
   `(do-set-timeout (25)
      ,@body))
 
