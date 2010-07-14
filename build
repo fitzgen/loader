@@ -1,15 +1,32 @@
 #!/usr/bin/env sh
 
-sbcl --load ps-helpers.lisp \
-     --eval '(compile-ps-file-to loader.parenscript loader.s)' \
-     --noinform \
-     --disable-ldb \
-     --lose-on-corruption
+set -e
 
-CODE=$(cat loader.js)
+echo '
+(require (quote parenscript))
+(in-package :ps)
+(load "ps-helpers.lisp")
+(compile-ps-file-to "loader.parenscript" "loader.js")
+(sb-ext:quit)' \
+    > .__temp_hack.lisp
+
+sbcl --script .__temp_hack.lisp 1>> /dev/null 2>> /dev/null
+
+rm .__temp_hack.lisp
+
+echo "loader.js"
+
+code=$(cat loader.js)
+
+if [ -f loader.min.js ]; then
+    rm loader.min.js
+fi
 
 curl -d compilation_level=SIMPLE_OPTIMIZATIONS \
-     -d output_format=text \
-     -d output_info=compiled_code \
-     -d js_code='$CODE' \
-     http://closure-compiler.appspot.com/compile >> loader.min.js
+    -d output_format=text \
+    -d output_info=compiled_code \
+    -d js_code='$code' \
+    http://closure-compiler.appspot.com/compile \
+    2> /dev/null 1>> loader.min.js
+
+echo "loader.min.js"
