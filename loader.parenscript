@@ -5,6 +5,10 @@
           ;; will just use an empty object and cache for this session only.
           (local-storage (or (@ window local-storage) (create)))
 
+          ;; Private boolean that maintains whether we should be caching to
+          ;; localStorage or not.
+          (should-use-local-storage-for-caching true)
+
           ;; Make an array from thing.
           (to-array (func (thing i)
                       (@@ *array prototype slice (call thing (or i 0)))))
@@ -15,13 +19,14 @@
 
           ;; Evaluate `str` in the global context.
           (global-eval (func (str callback)
-                         (set! callback (or callback (func ())))
-                         (let ((s (@@ document (create-element "script"))))
-                           (set! (@ s type) "text/javascript"
-                                 (@ s text) str)
-                           (@@ head (append-child s))
-                           (@@ head (remove-child s)))
-                         (callback)))
+                         (delayed#
+                           (set! callback (or callback (func ())))
+                           (let ((s (@@ document (create-element "script"))))
+                             (set! (@ s type) "text/javascript"
+                                   (@ s text) str)
+                             (@@ head (append-child s))
+                             (@@ head (remove-child s)))
+                           (callback))))
 
           ;; Can't throw errors in expressions, so this is a way to get around
           ;; it.
@@ -53,7 +58,8 @@
 
   ;; Try to get the script from the window.localStorage cache.
   (defn (get-cached script)
-    (if (in script local-storage)
+    (if (and should-use-local-storage-for-caching
+             (in script local-storage))
         (slot-value local-storage script)
         false))
 
@@ -79,14 +85,16 @@
         (@@ head (append-child el))))
 
   (defn (get-same-origin-script url callback)
-    ;; TODO: Cache invalidation?
-    (if-let ((cached (get-cached script)))
-      (global-eval cached callback)
-      ;; Since it is not available in localStorage, make an ajax request to
-      ;; fetch it, store the response in the cache, and continue.
-      (xhr-get-request url (func ()
-                             (set! (slot-value local-storage script) response-text)
-                             (global-eval response-text callback)))))
+    (if should-use-local-storage-for-caching
+      ;; TODO: Cache invalidation?
+      (if-let ((cached (get-cached script)))
+        (global-eval cached callback)
+        ;; Since it is not available in localStorage, make an ajax request to
+        ;; fetch it, store the response in the cache, and continue.
+        (xhr-get-request url (func ()
+                               (set! (slot-value local-storage script) response-text)
+                               (global-eval response-text callback))))
+      (get-remote-origin-script url callback)))
 
   ;; Start an asynchronous timeout loop that checks to see if there is a
   ;; batch of scripts on the `script-queue`. When there is a batch,
@@ -113,7 +121,13 @@
           (continue-timeout-loop)))))
 
   ;; Public API
-  (set! (@ exports $loader) (create :load (func (scripts callback)
+  (set! (@ exports $loader) (create 'load (func (scripts callback)
+                                            ;; TODO: Preload scripts, but avoid
+                                            ;; evaluation using bogus mimetype?
                                             ((@ script-queue push) (create :batch scripts
                                                                            :callback (or callback (func () null))))
-                                            this))))
+                                            this)
+                                    'set-options (func (opts)
+                                                   (when (in 'use-local-storage opts)
+                                                     (set! should-use-local-storage-for-caching
+                                                           (@ opts use-local-storage)))))))
