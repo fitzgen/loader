@@ -1,6 +1,10 @@
 #!/usr/bin/env sh
 
-# TODO: make script to compile parenscript -> js
+sbcl --load ps-helpers.lisp \
+     --eval '(compile-ps-file-to loader.parenscript loader.s)' \
+     --noinform \
+     --disable-ldb \
+     --lose-on-corruption
 
 CODE=$(cat loader.js)
 
