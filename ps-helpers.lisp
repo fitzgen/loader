@@ -114,6 +114,10 @@
   `(once-when# ,test
      (progn ,@body repeat-timeout)))
 
+(defmacro+ps delayed# (&body body)
+  `(do-set-timeout (25)
+     ,@body))
+
 ;; Quick, helpful shortcut to `chain`, which does chaining of methods and
 ;; properties.
 ;;
