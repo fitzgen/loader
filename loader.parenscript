@@ -20,7 +20,7 @@
           ;; Evaluate `str` in the global context.
           (global-eval (func (str callback)
                          (delayed->
-                           (set! callback (or callback (func ())))
+                           (set! callback (or callback (\ )))
                            (let ((s (@@ document (create-element "script"))))
                              (set! (@ s type) "text/javascript"
                                    (@ s text) str)
@@ -36,10 +36,8 @@
           (xhr (if (and (@ window *x-m-l-http-request)
                         (or (!== (@ window location protocol) "file:")
                             (! (@ window *active-x-object))))
-                   (func ()
-                     (new (@ window *x-m-l-http-request)))
-                   (func ()
-                     (new ((@ window *active-x-object) "Microsoft.XMLHTTP"))))))
+                   (\ (new (@ window *x-m-l-http-request)))
+                   (\ (new ((@ window *active-x-object) "Microsoft.XMLHTTP"))))))
 
   ;; Make a GET request.
   (defn (xhr-get-request url callback)
@@ -112,7 +110,7 @@
         ;; XXX: Using a return value only to force a self-invoking function in
         ;; the compilation, since a typical for loop wouldn't be valid.
         (dolist (url batch batch)
-          (get-script url (func () (decf num-scripts-loading))))
+          (get-script url (\ (decf num-scripts-loading))))
 
         ;; Once there aren't anymore scripts loading, we
         ;; can continue and process the next batch.
@@ -124,8 +122,8 @@
   (set! (@ exports $loader) (create 'load (func (scripts callback)
                                             ;; TODO: Preload scripts, but avoid
                                             ;; evaluation using bogus mimetype?
-                                            ((@ script-queue push) (create :batch scripts
-                                                                           :callback (or callback (func () null))))
+                                            (@@ script-queue (push (create :batch scripts
+                                                                           :callback (or callback (\ null)))))
                                             this)
                                     'set-options (func (opts)
                                                    (when (in 'use-local-storage opts)

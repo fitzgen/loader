@@ -30,6 +30,15 @@
      (var recur (@ arguments callee))
      ,@(insert-return body)))
 
+;; For those cases where you barely need a real function.
+(defmacro+ps \ (&body body)
+      `(lambda ()
+         ,@(mapcar #'(lambda (n)
+                       `(var ,(intern (concatenate 'string "@" (write-to-string n)))
+                             (@ arguments ,(- n 1))))
+                   '(1 2 3))
+         ,@body))
+
 ;; The built in `with-slots` macro uses symbol-macrolet which doesn't work for
 ;; symbols in the function calling position (probably b/c CL won't play nice
 ;; since its a Lisp-2). Because of that, I created my own that does expand
